@@ -43,7 +43,7 @@ def read_approval_file():
         with open(APPROVAL_FILE, 'r') as file:
             for line in file:
                 line = line.strip()
-                if line and ',' in line:
+                if line and ',' in line:  # Skip empty lines
                     key, status = line.split(',', 1)
                     approvals[key] = status
     return approvals
@@ -67,20 +67,17 @@ def update_key_status(key, new_status):
 # Home route to generate and display a unique key
 @app.route('/')
 def home():
-    # Check if a unique key exists in cookies
-    unique_key = request.cookies.get('user_key')
-    if not unique_key:  # If no key exists, generate a new one
+    unique_key = request.cookies.get('unique_key')
+    if not unique_key:
         unique_key = generate_unique_key()
         write_new_key(unique_key)
-    
-    # Set the key in the cookies for future requests
+
     resp = make_response(render_template_string('''
         <h1>Welcome!</h1>
         <p>Your unique key: <strong>{{ key }}</strong></p>
         <p>Please send this key to the administrator for approval.</p>
     ''', key=unique_key))
-
-    resp.set_cookie('user_key', unique_key)  # Set cookie to store the key
+    resp.set_cookie('unique_key', unique_key)
     return resp
 
 # Route for the user to check the status of their key
@@ -91,11 +88,20 @@ def check_status():
         approvals = read_approval_file()
         status = approvals.get(user_key, 'Invalid')
         if status == 'Approved':
-            return render_template_string('''<h1>Access Granted</h1><p>Your key has been approved. You can now access the application.</p>''')
+            return render_template_string('''
+                <h1>Access Granted</h1>
+                <p>Your key has been approved. You can now access the application.</p>
+            ''')
         elif status == 'Pending':
-            return render_template_string('''<h1>Your key is still pending approval</h1><p>Your key is pending approval. Please wait for the administrator to approve it.</p>''')
+            return render_template_string('''
+                <h1>Your key is still pending approval</h1>
+                <p>Your key is pending approval. Please wait for the administrator to approve it.</p>
+            ''')
         else:
-            return render_template_string('''<h1>Invalid Key</h1><p>The key you entered is invalid. Please check the key and try again.</p>''')
+            return render_template_string('''
+                <h1>Invalid Key</h1>
+                <p>The key you entered is invalid. Please check the key and try again.</p>
+            ''')
     return render_template_string('''
         <h1>Check Key Status</h1>
         <form method="post">
@@ -119,9 +125,16 @@ def admin():
             success = update_key_status(user_key, 'Rejected')
         else:
             success = False
-        message = f'Key {user_key} has been {action}d.' if success else f'Key {user_key} not found.'
-        return redirect(url_for('admin'))
-    
+        if success:
+            message = f'Key {user_key} has been {action}d.'
+        else:
+            message = f'Key {user_key} not found.'
+        return render_template_string('''
+            <h1>Admin Panel</h1>
+            <p>{{ message }}</p>
+            <a href="/admin">Go back</a>
+        ''', message=message)
+
     return render_template_string('''
         <h1>Admin Panel</h1>
         <table border="1">
@@ -157,3 +170,4 @@ def admin():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
